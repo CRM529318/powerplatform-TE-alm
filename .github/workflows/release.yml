@@ -1,1 +1,167 @@
+name: Power Platform Enterprise Release
 
+on:
+  workflow_dispatch:
+    inputs:
+      solutions:
+        description: "Solutions (comma separated: core,process,ux)"
+        required: true
+
+concurrency:
+  group: release-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+
+# 🔹 STEP 1 — EXPORT & CREATE ARTIFACT
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      solution_list: ${{ steps.set-matrix.outputs.solutions }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install PAC CLI
+      run: npm install -g pac
+
+    - name: Parse Solutions
+      id: set-matrix
+      run: |
+        echo "solutions=$(echo '${{ inputs.solutions }}' | jq -R -c 'split(",")')" >> $GITHUB_OUTPUT
+
+    - name: Authenticate DEV
+      run: |
+        pac auth create \
+          --url ${{ secrets.DEV_URL }} \
+          --applicationId ${{ secrets.CLIENT_ID }} \
+          --clientSecret ${{ secrets.CLIENT_SECRET }} \
+          --tenant ${{ secrets.TENANT_ID }}
+
+    - name: Export Solutions
+      run: |
+        for sol in $(echo "${{ inputs.solutions }}" | tr ',' ' '); do
+          pac solution export \
+            --name $sol \
+            --path $sol.zip \
+            --managed
+        done
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: powerplatform-release
+        path: "*.zip"
+
+# 🔹 STEP 2 — TEST
+  deploy-test:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: powerplatform-release
+
+    - name: Install PAC CLI
+      run: npm install -g pac
+
+    - name: Authenticate TEST
+      run: |
+        pac auth create \
+          --url ${{ secrets.TEST_URL }} \
+          --applicationId ${{ secrets.CLIENT_ID }} \
+          --clientSecret ${{ secrets.CLIENT_SECRET }} \
+          --tenant ${{ secrets.TENANT_ID }}
+
+    # 🔥 Dependency Order Deployment
+    - name: Deploy CORE → PROCESS → UX
+      run: |
+        for sol in core process ux; do
+          if [ -f "$sol.zip" ]; then
+            echo "Deploying $sol to TEST"
+            pac solution import \
+              --path $sol.zip \
+              --settings-file ./config/test/deploymentSettings.json \
+              --publish-changes \
+              --activate-plugins
+          fi
+        done
+
+# 🔹 STEP 3 — UAT (APPROVAL)
+  deploy-uat:
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment: uat
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: powerplatform-release
+
+    - name: Install PAC CLI
+      run: npm install -g pac
+
+    - name: Authenticate UAT
+      run: |
+        pac auth create \
+          --url ${{ secrets.UAT_URL }} \
+          --applicationId ${{ secrets.CLIENT_ID }} \
+          --clientSecret ${{ secrets.CLIENT_SECRET }} \
+          --tenant ${{ secrets.TENANT_ID }}
+
+    - name: Deploy in Order
+      run: |
+        for sol in core process ux; do
+          if [ -f "$sol.zip" ]; then
+            echo "Deploying $sol to UAT"
+            pac solution import \
+              --path $sol.zip \
+              --settings-file ./config/uat/deploymentSettings.json \
+              --publish-changes \
+              --activate-plugins
+          fi
+        done
+
+# 🔹 STEP 4 — PROD (APPROVAL)
+  deploy-prod:
+    needs: deploy-uat
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: powerplatform-release
+
+    - name: Install PAC CLI
+      run: npm install -g pac
+
+    - name: Authenticate PROD
+      run: |
+        pac auth create \
+          --url ${{ secrets.PROD_URL }} \
+          --applicationId ${{ secrets.CLIENT_ID }} \
+          --clientSecret ${{ secrets.CLIENT_SECRET }} \
+          --tenant ${{ secrets.TENANT_ID }}
+
+    - name: Deploy in Order
+      run: |
+        for sol in core process ux; do
+          if [ -f "$sol.zip" ]; then
+            echo "Deploying $sol to PROD"
+            pac solution import \
+              --path $sol.zip \
+              --settings-file ./config/prod/deploymentSettings.json \
+              --publish-changes \
+              --activate-plugins
+          fi
+        done
+
+    - name: Apply Upgrade
+      run: |
+        for sol in core process ux; do
+          pac solution upgrade --name $sol || true
+        done
