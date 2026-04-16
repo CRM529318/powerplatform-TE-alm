@@ -1,15 +1,14 @@
-name: Power Platform Release (Stable)
+name: Power Platform Release (FINAL)
 
 on:
   workflow_dispatch:
     inputs:
       solutions:
-        description: "Solution names (example: core or core,process)"
+        description: "Solution names (example: core)"
         required: true
 
 jobs:
 
-# ================= BUILD =================
   build:
     runs-on: ubuntu-latest
 
@@ -17,23 +16,20 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    # ✅ Use .NET (NO NODE NEEDED)
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
 
-    # ✅ Install PAC CLI (STABLE WAY)
     - name: Install PAC CLI
       run: |
         dotnet tool install --global Microsoft.PowerApps.CLI.Tool
         echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-    # ✅ Verify
+    # ✅ FIXED
     - name: Verify PAC
-      run: pac version
+      run: pac help
 
-    # 🔐 AUTH DEV
     - name: Authenticate DEV
       run: |
         pac auth create \
@@ -42,25 +38,20 @@ jobs:
           --clientSecret "${{ secrets.CLIENT_SECRET }}" \
           --tenant "${{ secrets.TENANT_ID }}"
 
-    # 📦 EXPORT
-    - name: Export Solutions
+    - name: Export Solution
       run: |
-        for sol in $(echo "${{ inputs.solutions }}" | tr ',' ' '); do
-          echo "Exporting $sol"
-          pac solution export \
-            --name "$sol" \
-            --path "$sol.zip" \
-            --managed
-        done
+        pac solution export \
+          --name "${{ inputs.solutions }}" \
+          --path solution.zip \
+          --managed
 
-    # 📦 ARTIFACT
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: powerplatform-release
-        path: "*.zip"
+        name: solution-artifact
+        path: solution.zip
 
-# ================= TEST =================
+
   deploy-test:
     needs: build
     runs-on: ubuntu-latest
@@ -68,7 +59,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v4
       with:
-        name: powerplatform-release
+        name: solution-artifact
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -88,19 +79,14 @@ jobs:
           --clientSecret "${{ secrets.CLIENT_SECRET }}" \
           --tenant "${{ secrets.TENANT_ID }}"
 
-    - name: Deploy to TEST
+    - name: Import to TEST
       run: |
-        for sol in core process ux; do
-          if [ -f "$sol.zip" ]; then
-            echo "Deploying $sol to TEST"
-            pac solution import \
-              --path "$sol.zip" \
-              --publish-changes \
-              --activate-plugins
-          fi
-        done
+        pac solution import \
+          --path solution.zip \
+          --publish-changes \
+          --activate-plugins
 
-# ================= UAT =================
+
   deploy-uat:
     needs: deploy-test
     runs-on: ubuntu-latest
@@ -108,7 +94,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v4
       with:
-        name: powerplatform-release
+        name: solution-artifact
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -128,19 +114,14 @@ jobs:
           --clientSecret "${{ secrets.CLIENT_SECRET }}" \
           --tenant "${{ secrets.TENANT_ID }}"
 
-    - name: Deploy to UAT
+    - name: Import to UAT
       run: |
-        for sol in core process ux; do
-          if [ -f "$sol.zip" ]; then
-            echo "Deploying $sol to UAT"
-            pac solution import \
-              --path "$sol.zip" \
-              --publish-changes \
-              --activate-plugins
-          fi
-        done
+        pac solution import \
+          --path solution.zip \
+          --publish-changes \
+          --activate-plugins
 
-# ================= PROD =================
+
   deploy-prod:
     needs: deploy-uat
     runs-on: ubuntu-latest
@@ -148,7 +129,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v4
       with:
-        name: powerplatform-release
+        name: solution-artifact
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -168,20 +149,13 @@ jobs:
           --clientSecret "${{ secrets.CLIENT_SECRET }}" \
           --tenant "${{ secrets.TENANT_ID }}"
 
-    - name: Deploy to PROD
+    - name: Import to PROD
       run: |
-        for sol in core process ux; do
-          if [ -f "$sol.zip" ]; then
-            echo "Deploying $sol to PROD"
-            pac solution import \
-              --path "$sol.zip" \
-              --publish-changes \
-              --activate-plugins
-          fi
-        done
+        pac solution import \
+          --path solution.zip \
+          --publish-changes \
+          --activate-plugins
 
-    - name: Apply Upgrade
+    - name: Upgrade Solution
       run: |
-        for sol in core process ux; do
-          pac solution upgrade --name "$sol" || true
-        done
+        pac solution upgrade --name "${{ inputs.solutions }}" || true
