@@ -29,7 +29,7 @@ jobs:
         echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
     - name: Verify PAC
-      run: pac --version
+      run: pac version
 
     # 🔐 AUTH DEV
     - name: Authenticate DEV
