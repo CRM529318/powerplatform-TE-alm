@@ -1,0 +1,46 @@
+name: Rollback Power Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: "Artifact name (example: powerplatform-release)"
+        required: true
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install PAC CLI
+      run: npm install -g pac@latest
+
+    - name: Download Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+
+    - name: Authenticate PROD
+      run: |
+        pac auth create \
+          --url ${{ secrets.PROD_URL }} \
+          --applicationId ${{ secrets.CLIENT_ID }} \
+          --clientSecret ${{ secrets.CLIENT_SECRET }} \
+          --tenant ${{ secrets.TENANT_ID }}
+
+    - name: Re-deploy Previous Version
+      run: |
+        for sol in core process ux; do
+          if [ -f "$sol.zip" ]; then
+            echo "Rolling back $sol"
+            pac solution import \
+              --path $sol.zip \
+              --publish-changes
+          fi
+        done
