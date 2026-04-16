@@ -22,9 +22,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
+    - name: Setup Node.js (FIX ERROR)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
     - name: Install PAC CLI
-      run: npm install -g pac
+      run: npm install -g pac@latest
 
     - name: Parse Solutions
       id: set-matrix
@@ -65,8 +68,12 @@ jobs:
       with:
         name: powerplatform-release
 
+    - name: Setup Node.js (FIX ERROR)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
     - name: Install PAC CLI
-      run: npm install -g pac
+      run: npm install -g pac@latest
 
     - name: Authenticate TEST
       run: |
@@ -101,8 +108,12 @@ jobs:
       with:
         name: powerplatform-release
 
+    - name: Setup Node.js (FIX ERROR)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
     - name: Install PAC CLI
-      run: npm install -g pac
+      run: npm install -g pac@latestc
 
     - name: Authenticate UAT
       run: |
@@ -136,8 +147,12 @@ jobs:
       with:
         name: powerplatform-release
 
+    - name: Setup Node.js (FIX ERROR)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
     - name: Install PAC CLI
-      run: npm install -g pac
+      run: npm install -g pac@latest
 
     - name: Authenticate PROD
       run: |
