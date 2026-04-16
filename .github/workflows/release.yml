@@ -1,4 +1,4 @@
-name: Power Platform Enterprise Release
+name: Power Platform Release (Enterprise Ready)
 
 on:
   workflow_dispatch:
@@ -7,33 +7,31 @@ on:
         description: "Solutions (comma separated: core,process,ux)"
         required: true
 
-concurrency:
-  group: release-${{ github.run_id }}
-  cancel-in-progress: false
-
 jobs:
 
-# 🔹 STEP 1 — EXPORT & CREATE ARTIFACT
+# 🔹 BUILD (EXPORT + ARTIFACT)
   build:
     runs-on: ubuntu-latest
 
-    outputs:
-      solution_list: ${{ steps.set-matrix.outputs.solutions }}
-
     steps:
     - uses: actions/checkout@v3
-    - name: Setup Node.js (FIX ERROR)
+
+    # ✅ FIX NODE ISSUE
+    - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+
+    # ✅ Install PAC CLI (STABLE)
     - name: Install PAC CLI
-      run: npm install -g pac@latest
-
-    - name: Parse Solutions
-      id: set-matrix
       run: |
-        echo "solutions=$(echo '${{ inputs.solutions }}' | jq -R -c 'split(",")')" >> $GITHUB_OUTPUT
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
+    - name: Verify PAC
+      run: pac --version
+
+    # 🔐 AUTH DEV
     - name: Authenticate DEV
       run: |
         pac auth create \
@@ -42,39 +40,45 @@ jobs:
           --clientSecret ${{ secrets.CLIENT_SECRET }} \
           --tenant ${{ secrets.TENANT_ID }}
 
+    # 📦 EXPORT SOLUTIONS
     - name: Export Solutions
       run: |
         for sol in $(echo "${{ inputs.solutions }}" | tr ',' ' '); do
+          echo "Exporting $sol"
           pac solution export \
             --name $sol \
             --path $sol.zip \
             --managed
         done
 
+    # 📦 UPLOAD ARTIFACT
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: powerplatform-release
         path: "*.zip"
 
-# 🔹 STEP 2 — TEST
+# 🔹 TEST DEPLOY
   deploy-test:
     needs: build
     runs-on: ubuntu-latest
-    environment: test
 
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: powerplatform-release
 
-    - name: Setup Node.js (FIX ERROR)
+    - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-    - name: Install PAC CLI
-      run: npm install -g pac@latest
 
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+    # 🔐 AUTH TEST
     - name: Authenticate TEST
       run: |
         pac auth create \
@@ -83,38 +87,40 @@ jobs:
           --clientSecret ${{ secrets.CLIENT_SECRET }} \
           --tenant ${{ secrets.TENANT_ID }}
 
-    # 🔥 Dependency Order Deployment
-    - name: Deploy CORE → PROCESS → UX
+    # 🚀 DEPLOY IN ORDER
+    - name: Deploy to TEST
       run: |
         for sol in core process ux; do
           if [ -f "$sol.zip" ]; then
             echo "Deploying $sol to TEST"
             pac solution import \
               --path $sol.zip \
-              --settings-file ./config/test/deploymentSettings.json \
               --publish-changes \
               --activate-plugins
           fi
         done
 
-# 🔹 STEP 3 — UAT (APPROVAL)
+# 🔹 UAT DEPLOY
   deploy-uat:
     needs: deploy-test
     runs-on: ubuntu-latest
-    environment: uat
 
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: powerplatform-release
 
-    - name: Setup Node.js (FIX ERROR)
+    - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-    - name: Install PAC CLI
-      run: npm install -g pac@latestc
 
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+    # 🔐 AUTH UAT
     - name: Authenticate UAT
       run: |
         pac auth create \
@@ -123,37 +129,39 @@ jobs:
           --clientSecret ${{ secrets.CLIENT_SECRET }} \
           --tenant ${{ secrets.TENANT_ID }}
 
-    - name: Deploy in Order
+    - name: Deploy to UAT
       run: |
         for sol in core process ux; do
           if [ -f "$sol.zip" ]; then
             echo "Deploying $sol to UAT"
             pac solution import \
               --path $sol.zip \
-              --settings-file ./config/uat/deploymentSettings.json \
               --publish-changes \
               --activate-plugins
           fi
         done
 
-# 🔹 STEP 4 — PROD (APPROVAL)
+# 🔹 PROD DEPLOY
   deploy-prod:
     needs: deploy-uat
     runs-on: ubuntu-latest
-    environment: prod
 
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: powerplatform-release
 
-    - name: Setup Node.js (FIX ERROR)
+    - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-    - name: Install PAC CLI
-      run: npm install -g pac@latest
 
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+    # 🔐 AUTH PROD
     - name: Authenticate PROD
       run: |
         pac auth create \
@@ -162,14 +170,13 @@ jobs:
           --clientSecret ${{ secrets.CLIENT_SECRET }} \
           --tenant ${{ secrets.TENANT_ID }}
 
-    - name: Deploy in Order
+    - name: Deploy to PROD
       run: |
         for sol in core process ux; do
           if [ -f "$sol.zip" ]; then
             echo "Deploying $sol to PROD"
             pac solution import \
               --path $sol.zip \
-              --settings-file ./config/prod/deploymentSettings.json \
               --publish-changes \
               --activate-plugins
           fi
