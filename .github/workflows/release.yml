@@ -90,6 +90,7 @@ jobs:
   deploy-uat:
     needs: deploy-test
     runs-on: ubuntu-latest
+    environment: uat
 
     steps:
     - uses: actions/download-artifact@v4
@@ -125,6 +126,7 @@ jobs:
   deploy-prod:
     needs: deploy-uat
     runs-on: ubuntu-latest
+    environment: prod
 
     steps:
     - uses: actions/download-artifact@v4
