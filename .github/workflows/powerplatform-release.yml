@@ -1,0 +1,93 @@
+name: Power Platform Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      solutionName:
+        required: true
+      solutionVersion:
+        required: true
+
+jobs:
+
+  deploy-test:
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+
+    - name: Setup & Install PAC
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+    - name: Authenticate TEST
+      run: |
+        pac auth create \
+          --url "${{ secrets.TEST_URL }}" \
+          --applicationId "${{ secrets.CLIENT_ID }}" \
+          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+          --tenant "${{ secrets.TENANT_ID }}"
+
+    - name: Import to TEST
+      run: |
+        pac solution import \
+          --path ${{ inputs.solutionName }}.zip \
+          --publish-changes \
+          --activate-plugins
+
+  deploy-uat:
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment: uat
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+
+    - name: Authenticate UAT
+      run: |
+        pac auth create \
+          --url "${{ secrets.UAT_URL }}" \
+          --applicationId "${{ secrets.CLIENT_ID }}" \
+          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+          --tenant "${{ secrets.TENANT_ID }}"
+
+    - name: Import to UAT
+      run: |
+        pac solution import \
+          --path ${{ inputs.solutionName }}.zip \
+          --publish-changes \
+          --activate-plugins
+
+  deploy-prod:
+    needs: deploy-uat
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+
+    - name: Authenticate PROD
+      run: |
+        pac auth create \
+          --url "${{ secrets.PROD_URL }}" \
+          --applicationId "${{ secrets.CLIENT_ID }}" \
+          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+          --tenant "${{ secrets.TENANT_ID }}"
+
+    - name: Import to PROD
+      run: |
+        pac solution import \
+          --path ${{ inputs.solutionName }}.zip \
+          --publish-changes \
+          --activate-plugins
+
+    - name: Upgrade Solution
+      run: pac solution upgrade --name "${{ inputs.solutionName }}" || true
