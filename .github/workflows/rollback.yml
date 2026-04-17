@@ -1,10 +1,13 @@
-name: Rollback Power Platform
+name: Rollback Deployment
 
 on:
   workflow_dispatch:
     inputs:
-      artifact_name:
-        description: "Artifact name (example: powerplatform-release)"
+      solution:
+        description: "Solution name (core)"
+        required: true
+      version:
+        description: "Version (example: v1.0.15)"
         required: true
 
 jobs:
@@ -13,34 +16,34 @@ jobs:
     environment: prod
 
     steps:
-    - name: Setup Node
-      uses: actions/setup-node@v4
+    - name: Download from Release
+      run: |
+        curl -L \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          -o solution.zip \
+          https://github.com/${{ github.repository }}/releases/download/${{ inputs.version }}/${{ inputs.solution }}-${{ inputs.version }}.zip
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        node-version: '18'
+        dotnet-version: '8.0.x'
 
     - name: Install PAC CLI
-      run: npm install -g pac@latest
-
-    - name: Download Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ inputs.artifact_name }}
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
     - name: Authenticate PROD
       run: |
         pac auth create \
-          --url ${{ secrets.PROD_URL }} \
-          --applicationId ${{ secrets.CLIENT_ID }} \
-          --clientSecret ${{ secrets.CLIENT_SECRET }} \
-          --tenant ${{ secrets.TENANT_ID }}
+          --url "${{ secrets.PROD_URL }}" \
+          --applicationId "${{ secrets.CLIENT_ID }}" \
+          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+          --tenant "${{ secrets.TENANT_ID }}"
 
-    - name: Re-deploy Previous Version
+    - name: Rollback Deployment
       run: |
-        for sol in core process ux; do
-          if [ -f "$sol.zip" ]; then
-            echo "Rolling back $sol"
-            pac solution import \
-              --path $sol.zip \
-              --publish-changes
-          fi
-        done
+        pac solution import \
+          --path solution.zip \
+          --publish-changes \
+          --activate-plugins
