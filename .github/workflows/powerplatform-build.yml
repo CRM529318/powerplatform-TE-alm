@@ -36,21 +36,11 @@ jobs:
         --clientSecret "${{ secrets.CLIENT_SECRET }}" \
         --tenant "${{ secrets.TENANT_ID }}"
 
-    # ✅ Auto version = 1.0.0.<GitHub Run Number>
-    - name: Set Solution Version
-      run: |
-        VERSION="1.0.0.${{ github.run_number }}"
-        echo "Updating solution version to $VERSION"
-        pac solution version \
-        --name "${{ inputs.solutionName }}" \
-        --version "$VERSION"
-
-    # ✅ FIXED EXPORT (no parsing error)
+    # ✅ FIXED: No version command (avoids PAC error)
     - name: Export Managed Solution
       run: |
         pac solution export --name "${{ inputs.solutionName }}" --path solution.zip --managed
 
-    # ✅ Solution Checker
     - name: Run Solution Checker
       run: |
         pac solution checker run --path solution.zip --outputDirectory checker-results
