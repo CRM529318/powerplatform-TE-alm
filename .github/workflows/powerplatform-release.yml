@@ -3,9 +3,8 @@ name: Power Platform Release
 on:
   workflow_dispatch:
     inputs:
-      solutionName:
-        required: true
-      solutionVersion:
+      releaseTag:
+        description: "GitHub Release tag to deploy (example: build-23)"
         required: true
 
 jobs:
@@ -15,11 +14,13 @@ jobs:
     environment: test
 
     steps:
-    - uses: actions/download-artifact@v4
+    - name: Download artifact from GitHub Release
+      uses: robinraju/release-downloader@v1
       with:
-        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+        tag: ${{ inputs.releaseTag }}
+        fileName: solution.zip
 
-    - name: Setup & Install PAC
+    - name: Install PAC CLI
       run: |
         dotnet tool install --global Microsoft.PowerApps.CLI.Tool
         echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
@@ -27,17 +28,14 @@ jobs:
     - name: Authenticate TEST
       run: |
         pac auth create \
-          --url "${{ secrets.TEST_URL }}" \
-          --applicationId "${{ secrets.CLIENT_ID }}" \
-          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
-          --tenant "${{ secrets.TENANT_ID }}"
+        --url "${{ secrets.TEST_URL }}" \
+        --applicationId "${{ secrets.CLIENT_ID }}" \
+        --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+        --tenant "${{ secrets.TENANT_ID }}"
 
     - name: Import to TEST
       run: |
-        pac solution import \
-          --path ${{ inputs.solutionName }}.zip \
-          --publish-changes \
-          --activate-plugins
+        pac solution import --path solution.zip --publish-changes --activate-plugins
 
   deploy-uat:
     needs: deploy-test
@@ -45,24 +43,22 @@ jobs:
     environment: uat
 
     steps:
-    - uses: actions/download-artifact@v4
+    - uses: robinraju/release-downloader@v1
       with:
-        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+        tag: ${{ inputs.releaseTag }}
+        fileName: solution.zip
 
     - name: Authenticate UAT
       run: |
         pac auth create \
-          --url "${{ secrets.UAT_URL }}" \
-          --applicationId "${{ secrets.CLIENT_ID }}" \
-          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
-          --tenant "${{ secrets.TENANT_ID }}"
+        --url "${{ secrets.UAT_URL }}" \
+        --applicationId "${{ secrets.CLIENT_ID }}" \
+        --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+        --tenant "${{ secrets.TENANT_ID }}"
 
     - name: Import to UAT
       run: |
-        pac solution import \
-          --path ${{ inputs.solutionName }}.zip \
-          --publish-changes \
-          --activate-plugins
+        pac solution import --path solution.zip --publish-changes --activate-plugins
 
   deploy-prod:
     needs: deploy-uat
@@ -70,24 +66,22 @@ jobs:
     environment: prod
 
     steps:
-    - uses: actions/download-artifact@v4
+    - uses: robinraju/release-downloader@v1
       with:
-        name: solution-${{ inputs.solutionName }}-${{ inputs.solutionVersion }}
+        tag: ${{ inputs.releaseTag }}
+        fileName: solution.zip
 
     - name: Authenticate PROD
       run: |
         pac auth create \
-          --url "${{ secrets.PROD_URL }}" \
-          --applicationId "${{ secrets.CLIENT_ID }}" \
-          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
-          --tenant "${{ secrets.TENANT_ID }}"
+        --url "${{ secrets.PROD_URL }}" \
+        --applicationId "${{ secrets.CLIENT_ID }}" \
+        --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+        --tenant "${{ secrets.TENANT_ID }}"
 
     - name: Import to PROD
       run: |
-        pac solution import \
-          --path ${{ inputs.solutionName }}.zip \
-          --publish-changes \
-          --activate-plugins
+        pac solution import --path solution.zip --publish-changes --activate-plugins
 
     - name: Upgrade Solution
-      run: pac solution upgrade --name "${{ inputs.solutionName }}" || true
+      run: pac solution upgrade || true
