@@ -4,10 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       solutionName:
-        description: "Solution unique name (e.g. core)"
-        required: true
-      solutionVersion:
-        description: "Version (e.g. 1.0.5.0)"
+        description: "Solution unique name (example: core)"
         required: true
 
 jobs:
@@ -28,26 +25,40 @@ jobs:
         dotnet tool install --global Microsoft.PowerApps.CLI.Tool
         echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
+    - name: Verify PAC
+      run: pac help
+
     - name: Authenticate DEV
       run: |
         pac auth create \
-          --url "${{ secrets.DEV_URL }}" \
-          --applicationId "${{ secrets.CLIENT_ID }}" \
-          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
-          --tenant "${{ secrets.TENANT_ID }}"
+        --url "${{ secrets.DEV_URL }}" \
+        --applicationId "${{ secrets.CLIENT_ID }}" \
+        --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+        --tenant "${{ secrets.TENANT_ID }}"
 
+    # ✅ Auto version = 1.0.0.<GitHub Run Number>
+    - name: Set Solution Version
+      run: |
+        VERSION="1.0.0.${{ github.run_number }}"
+        echo "Updating solution version to $VERSION"
+        pac solution version \
+        --name "${{ inputs.solutionName }}" \
+        --version "$VERSION"
+
+    # ✅ FIXED EXPORT (no parsing error)
     - name: Export Managed Solution
       run: |
-        pac solution export \
-          --name "${{ inputs.solutionName }}" \
-          --path ${{ inputs.solutionName }}.zip \
-          --managed
+        pac solution export --name "${{ inputs.solutionName }}" --path solution.zip --managed
 
-    # ✅ Solution Checker (MANDATORY in real ALM)
+    # ✅ Solution Checker
     - name: Run Solution Checker
       run: |
-        pac solution checker run \
-          --path ${{ inputs.solutionName }}.zip \
-          --outputDirectory checker-results \
-          --ruleSetId 0ad12346-e108-40b8-a956-9a8f95ea18c9
+        pac solution checker run --path solution.zip --outputDirectory checker-results
 
+    - name: Upload Solution Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: solution-${{ inputs.solutionName }}-${{ github.run_number }}
+        path: |
+          solution.zip
+          checker-results
