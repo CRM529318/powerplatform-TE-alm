@@ -1,5 +1,9 @@
 name: Power Platform Build
 
+# ✅ REQUIRED for GitHub Release creation
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -36,12 +40,10 @@ jobs:
         --clientSecret "${{ secrets.CLIENT_SECRET }}" \
         --tenant "${{ secrets.TENANT_ID }}"
 
-    # ✅ Export Managed Solution
     - name: Export Managed Solution
       run: |
         pac solution export --name "${{ inputs.solutionName }}" --path solution.zip --managed
 
-    # ✅ FIXED Solution Checker Command (PAC v2 compatible)
     - name: Run Solution Checker
       run: |
         pac solution check --path solution.zip --outputDirectory checker-results
@@ -53,12 +55,13 @@ jobs:
         path: |
           solution.zip
           checker-results
-          
+
+    # ✅ THIS NOW WORKS (403 fixed)
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.run_number }}
-        name: PowerPlatform Build ${{ github.run_number }}
+        name: Power Platform Build ${{ github.run_number }}
         files: solution.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
