@@ -47,6 +47,14 @@ jobs:
     - name: Run Solution Checker
       run: |
         pac solution check --path solution.zip --outputDirectory checker-results
+     # My change    
+    - name: Fail on Checker Issues
+      run: |
+        if [ -s "./checker-results/results.sarif" ]; then
+          echo "Issues found by Power Apps Checker"
+          exit 1
+        fi
+
 
     - name: Upload Solution Artifact
       uses: actions/upload-artifact@v4
