@@ -36,14 +36,15 @@ jobs:
         --clientSecret "${{ secrets.CLIENT_SECRET }}" \
         --tenant "${{ secrets.TENANT_ID }}"
 
-    # ✅ FIXED: No version command (avoids PAC error)
+    # ✅ Export Managed Solution
     - name: Export Managed Solution
       run: |
         pac solution export --name "${{ inputs.solutionName }}" --path solution.zip --managed
 
+    # ✅ FIXED Solution Checker Command (PAC v2 compatible)
     - name: Run Solution Checker
       run: |
-        pac solution checker run --path solution.zip --outputDirectory checker-results
+        pac solution check --path solution.zip --outputDirectory checker-results
 
     - name: Upload Solution Artifact
       uses: actions/upload-artifact@v4
@@ -52,3 +53,4 @@ jobs:
         path: |
           solution.zip
           checker-results
+``
