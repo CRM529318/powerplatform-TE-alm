@@ -2,7 +2,7 @@ name: Power Platform Build
 
 permissions:
   contents: write
-  security-events: write   # ✅ REQUIRED for SARIF upload
+  security-events: write
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
         echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
     - name: Verify PAC
-      run: pac help
+      run: pac solution check --help
 
     - name: Authenticate DEV
       run: |
@@ -40,7 +40,7 @@ jobs:
           --clientSecret "${{ secrets.CLIENT_SECRET }}" \
           --tenant "${{ secrets.TENANT_ID }}"
 
-    # ✅ Export managed solution (includes Apps + Flows)
+    # ✅ Export managed solution (Apps + Flows)
     - name: Export Managed Solution
       run: |
         pac solution export \
@@ -48,33 +48,33 @@ jobs:
           --path solution.zip \
           --managed
 
-    # ✅ Run Solution Checker (explicit SARIF output)
+    # ✅ PAC CLI v2 compatible Solution Checker
     - name: Run Solution Checker
       run: |
         pac solution check \
           --path solution.zip \
           --outputDirectory checker-results \
-          --ruleSetId 0ad12346-e108-40b8-a956-9a8f95ea18c9 \
-          --outputFormat sarif
+          --ruleSet SolutionChecker \
+          --saveResults
 
-    # ✅ Upload SARIF to GitHub Security tab (THIS IS "REVIEW")
-    - name: Publish Solution Checker to GitHub Security
+    # ✅ Publish SARIF to GitHub Security (auto-detected)
+    - name: Publish Solution Checker Results to GitHub
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: checker-results
 
-    # ✅ AUTOMATIC REVIEW: Parse results and enforce policy
+    # ✅ AUTOMATED REVIEW (policy enforcement)
     - name: Evaluate Solution Checker Results
       run: |
-        SUMMARY_FILE=$(find checker-results -name "*summary*.json" | head -n 1)
+        SUMMARY_FILE=$(find checker-results -iname "*summary*.json" | head -n 1)
 
         if [ -z "$SUMMARY_FILE" ]; then
           echo "❌ Solution Checker summary not found"
           exit 1
         fi
 
-        HIGH=$(jq '[.issues[] | select(.severity=="High")] | length' $SUMMARY_FILE)
-        CRITICAL=$(jq '[.issues[] | select(.severity=="Critical")] | length' $SUMMARY_FILE)
+        HIGH=$(jq '[.issues[] | select(.severity=="High")] | length' "$SUMMARY_FILE")
+        CRITICAL=$(jq '[.issues[] | select(.severity=="Critical")] | length' "$SUMMARY_FILE")
 
         echo "High issues: $HIGH"
         echo "Critical issues: $CRITICAL"
@@ -92,7 +92,6 @@ jobs:
           solution.zip
           checker-results
 
-    # ✅ Create release for promotion
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
