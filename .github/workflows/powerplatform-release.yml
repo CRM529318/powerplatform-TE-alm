@@ -14,12 +14,13 @@ jobs:
     environment: test
 
     steps:
-    - name: Download artifact from GitHub Release
+    - name: Download build artifact
       uses: robinraju/release-downloader@v1
       with:
         tag: ${{ inputs.releaseTag }}
         fileName: solution.zip
 
+    # ✅ MUST be done in every job
     - name: Install PAC CLI
       run: |
         dotnet tool install --global Microsoft.PowerApps.CLI.Tool
@@ -35,7 +36,10 @@ jobs:
 
     - name: Import to TEST
       run: |
-        pac solution import --path solution.zip --publish-changes --activate-plugins
+        pac solution import \
+        --path solution.zip \
+        --publish-changes \
+        --activate-plugins
 
   deploy-uat:
     needs: deploy-test
@@ -43,10 +47,17 @@ jobs:
     environment: uat
 
     steps:
-    - uses: robinraju/release-downloader@v1
+    - name: Download build artifact
+      uses: robinraju/release-downloader@v1
       with:
         tag: ${{ inputs.releaseTag }}
         fileName: solution.zip
+
+    # ✅ FIX: Install PAC again
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
     - name: Authenticate UAT
       run: |
@@ -58,7 +69,10 @@ jobs:
 
     - name: Import to UAT
       run: |
-        pac solution import --path solution.zip --publish-changes --activate-plugins
+        pac solution import \
+        --path solution.zip \
+        --publish-changes \
+        --activate-plugins
 
   deploy-prod:
     needs: deploy-uat
@@ -66,10 +80,17 @@ jobs:
     environment: prod
 
     steps:
-    - uses: robinraju/release-downloader@v1
+    - name: Download build artifact
+      uses: robinraju/release-downloader@v1
       with:
         tag: ${{ inputs.releaseTag }}
         fileName: solution.zip
+
+    # ✅ FIX: Install PAC again
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
     - name: Authenticate PROD
       run: |
@@ -81,7 +102,11 @@ jobs:
 
     - name: Import to PROD
       run: |
-        pac solution import --path solution.zip --publish-changes --activate-plugins
+        pac solution import \
+        --path solution.zip \
+        --publish-changes \
+        --activate-plugins
 
     - name: Upgrade Solution
-      run: pac solution upgrade || true
+      run: |
+        pac solution upgrade || true
