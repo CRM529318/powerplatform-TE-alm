@@ -53,3 +53,12 @@ jobs:
         path: |
           solution.zip
           checker-results
+          
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: build-${{ github.run_number }}
+        name: PowerPlatform Build ${{ github.run_number }}
+        files: solution.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
