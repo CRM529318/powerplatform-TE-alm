@@ -1,0 +1,53 @@
+name: Power Platform Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      solutionName:
+        description: "Solution unique name (e.g. core)"
+        required: true
+      solutionVersion:
+        description: "Version (e.g. 1.0.5.0)"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install PAC CLI
+      run: |
+        dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+    - name: Authenticate DEV
+      run: |
+        pac auth create \
+          --url "${{ secrets.DEV_URL }}" \
+          --applicationId "${{ secrets.CLIENT_ID }}" \
+          --clientSecret "${{ secrets.CLIENT_SECRET }}" \
+          --tenant "${{ secrets.TENANT_ID }}"
+
+    - name: Export Managed Solution
+      run: |
+        pac solution export \
+          --name "${{ inputs.solutionName }}" \
+          --path ${{ inputs.solutionName }}.zip \
+          --managed
+
+    # ✅ Solution Checker (MANDATORY in real ALM)
+    - name: Run Solution Checker
+      run: |
+        pac solution checker run \
+          --path ${{ inputs.solutionName }}.zip \
+          --outputDirectory checker-results \
+          --ruleSetId 0ad12346-e108-40b8-a956-9a8f95ea18c9
+
